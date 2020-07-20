@@ -1,0 +1,243 @@
+# Customise this file, documentation can be found here:
+# https://github.com/fastlane/fastlane/tree/master/fastlane/docs
+# All available actions: https://github.com/fastlane/fastlane/blob/master/fastlane/docs/Actions.md
+# can also be listed using the `fastlane actions` command
+
+# Change the syntax highlighting to Ruby
+# All lines starting with a # are ignored when running `fastlane`
+
+# If you want to automatically update fastlane if a new version is available:
+# update_fastlane
+
+# This is the minimum version number required.
+# Update this, if you use features of a newer version
+fastlane_require "pstore"
+
+fastlane_version '2.27.0'
+
+default_platform :ios
+
+platform :ios do
+    before_all do
+        # ENV["SLACK_URL"] = "https://hooks.slack.com/services/..."
+    end
+
+    lane :screenshots do |options|
+      capture_screenshots
+      frame_screenshots(white: true)
+    end
+
+    desc 'Resets the build to 1 and version to passed version value and push it to the origin.'
+    desc 'params version: the new version of the app'
+    lane :version_reset do |options|
+        # Set a specific version number
+        increment_version_number(version_number: options[:version])
+
+        # Set build number to 1.
+        increment_build_number(build_number: 1)
+
+        message = "You need to commit and push changes to the remote repo yourself."
+        puts message
+        say message
+    end
+
+    lane :quran_foundation do |options|
+      clean = options[:clean].nil? ? true : options[:clean]
+      build_frameworks(
+        archive: false,
+        target: 'both',
+        clean: clean)
+    end
+
+    lane :release_quran_foundation do |options|
+      clean = options[:clean].nil? ? true : options[:clean]
+      build_frameworks(
+        archive: true,
+        target: 'device',
+        clean: clean)
+    end
+
+    desc 'Submit a new Beta Build to Apple TestFlight'
+    desc 'This will also make sure the profile is up to date'
+    desc 'params clean: true|false, default is true'
+    desc 'params includeFrameworks: true|false, default is true'
+    lane :beta do |options|
+
+        clean = options[:clean].nil? ? true : options[:clean]
+        includeFrameworks = options[:includeFrameworks].nil? ? true : options[:includeFrameworks]
+
+        store = PStore.new("#{Dir.home}/com.quran.ios.pstore")
+
+        oldVersion = store.transaction { store[:versionKey] }
+        oldBuild = store.transaction { store[:buildKey] }
+
+        # Increase build number if the same version
+        currentVersion = get_version_number(target: "Quran")
+        currentBuild = "1"
+        if oldVersion == currentVersion
+            currentBuild = (oldBuild.to_i + 1).to_s
+        end
+
+        # Set the build number
+        increment_build_number(build_number: currentBuild)
+
+        # Update fabric keys
+        fabric_keys = ENV['fabric_keys'].split(',')
+        puts 'before'.color(:yellow)
+        file_names = ['../Quran.xcodeproj/project.pbxproj', '../Quran/Info.plist']
+        file_names.each do |file_name|
+            text = File.read(file_name)
+
+            fabric_keys.each do |key|
+                values = key.split('|')
+                puts " Replacing #{values[0]} => #{values[1]} in #{file_name}"
+                text = text.gsub(values[0], values[1])
+            end
+
+            # To write changes to the file, use:
+            File.open(file_name, 'w') { |file| file.puts text }
+        end
+
+        if includeFrameworks
+            # Build frameworks for QuranFoundation
+            release_quran_foundation(clean: clean)
+
+            # Build QuranFoundation
+            path = sh("pwd")
+            sh "cd ../../QuranFoundation; fastlane release clean:#{clean}"
+            sh "cd #{path}"
+        end
+
+        # Build the app
+        gym(
+            scheme: 'Quran',
+            configuration: "Release",
+            clean: clean,
+            output_directory: './build/',
+            include_symbols: true,
+            include_bitcode: true,
+            export_method: 'app-store'
+        )
+
+        # Upload to test flight
+        pilot(ipa: './build/Quran.ipa', skip_waiting_for_build_processing: true)
+
+        # Save the latest version and build number after uploaded succeed
+        store.transaction do
+            store[:versionKey] = currentVersion
+            store[:buildKey] = currentBuild
+        end
+
+        # Reset fabric keys changes & build number
+        # reset_git_repo(force: true)
+#       sh "git reset --hard HEAD"
+#       sh "git clean -fd"
+
+        # Say it succeeded
+        successMessage = 'New app version uploaded to TestFlight! Please wait while itunes connect process it. Success!'
+        say successMessage
+    end
+
+    desc 'This will build frameworks'
+    desc 'params archive: true|false'
+    desc 'params target: device|simulator|both'
+    desc 'params clean: true|false'
+    lane :build_frameworks do |options|
+      build_framework(
+        frameworkName: "BatchDownloader",
+        workspace: "../Quran.xcworkspace",
+        outputDir: "../../QuranFoundation/Frameworks",
+        archive: options[:archive],
+        target: options[:target],
+        clean: options[:clean])
+      build_framework(
+          frameworkName: "VFoundation",
+          workspace: "../Quran.xcworkspace",
+          outputDir: "../../QuranFoundation/Frameworks",
+          archive: options[:archive],
+          target: options[:target],
+          clean: options[:clean])
+      build_framework(
+          frameworkName: "SQLitePersistence",
+          workspace: "../Quran.xcworkspace",
+          outputDir: "../../QuranFoundation/Frameworks",
+          archive: options[:archive],
+          target: options[:target],
+          clean: options[:clean])
+    end
+
+    error do |lane, exception|
+        say "Error while trying to execute fastlane command. #{exception.message}"
+    end
+
+    ######################### PRIVATE LANES #########################
+    private_lane :build_framework do |options|
+
+      frameworkName = options[:frameworkName]
+      workspace = options[:workspace] || "../#{frameworkName}.xcworkspace"
+      outputDir = options[:outputDir]
+      buildDir = "../build"
+      deviceOutput = "#{buildDir}/Release-iphoneos"
+      simulatorOutput = "#{buildDir}/Release-iphonesimulator"
+      deviceOutputXC = File.absolute_path("..") + "/build/Release-iphoneos"
+      simulatorOutputXC = File.absolute_path("..") + "/build/Release-iphonesimulator"
+      appLocation = "#{outputDir}/#{frameworkName}.framework"
+
+      archive = options[:archive].nil? ? false : options[:archive]
+      target = options[:target].nil? ? "both" : options[:target]
+      clean = options[:clean].nil? ? true : options[:clean]
+
+      case target
+      when "both", "simulator", "device"
+      else
+        fail ArgumentError, "Unsupported target value '#{target}'. Should be one of (simulator, device, or both)!"
+      end
+
+      if archive
+        archiveString = "archive"
+      else
+        archiveString = "build"
+      end
+
+      if clean
+        cleanString = "clean"
+      else
+        cleanString = ""
+      end
+
+      # Delete the build directory
+      sh "rm -rf \"#{buildDir}\""
+
+      # Build for Device & Simulator
+      if target == "both" || target == "simulator"
+        sh "set -o pipefail && xcodebuild #{cleanString} #{archiveString} -scheme \"#{frameworkName}\" -workspace \"#{workspace}\" -configuration \"Release\" DEBUG_INFORMATION_FORMAT=\"dwarf-with-dsym\" only_active_arch=no -sdk \"iphonesimulator\" BUILT_PRODUCTS_DIR=\"#{simulatorOutputXC}\" CONFIGURATION_BUILD_DIR=\"#{simulatorOutputXC}/$CONFIGURATION\" | xcpretty"
+      end
+      if target == "both" || target == "device"
+        sh "set -o pipefail && xcodebuild #{cleanString} #{archiveString} -scheme \"#{frameworkName}\" -workspace \"#{workspace}\" -configuration \"Release\" DEBUG_INFORMATION_FORMAT=\"dwarf-with-dsym\" only_active_arch=no -sdk \"iphoneos\"        BUILT_PRODUCTS_DIR=\"#{deviceOutputXC}\"    CONFIGURATION_BUILD_DIR=\"#{deviceOutputXC}/$CONFIGURATION\" | xcpretty"
+      end
+
+      if target == "both"
+        # Combine all architectures together
+        sh "cp -r \"#{deviceOutput}/#{frameworkName}.framework\" \"#{buildDir}/#{frameworkName}.framework\""
+        sh "lipo -create -output \"#{buildDir}/#{frameworkName}.framework/#{frameworkName}\" \"#{deviceOutput}/#{frameworkName}.framework/#{frameworkName}\" \"#{simulatorOutput}/#{frameworkName}.framework/#{frameworkName}\""
+        sh "cp -r \"#{simulatorOutput}/#{frameworkName}.framework/Modules/#{frameworkName}.swiftmodule/\" \"#{buildDir}/#{frameworkName}.framework/Modules/#{frameworkName}.swiftmodule\""
+      end
+
+      # Copy the framework to the output
+      sh "rm -rf \"#{appLocation}\""
+      if target == "simulator"
+        sh "cp -r \"#{simulatorOutput}/#{frameworkName}.framework\" \"#{appLocation}\""
+      elsif target == "device"
+        sh "cp -r \"#{deviceOutput}/#{frameworkName}.framework\" \"#{appLocation}\""
+      else
+        sh "cp -r \"#{buildDir}/#{frameworkName}.framework\" \"#{appLocation}\""
+      end
+
+    end
+end
+
+# More information about multiple platforms in fastlane: https://github.com/fastlane/fastlane/blob/master/fastlane/docs/Platforms.md
+# All available actions: https://github.com/fastlane/fastlane/blob/master/fastlane/docs/Actions.md
+
+# fastlane reports which actions are used
+# No personal data is recorded. Learn more at https://github.com/fastlane/enhancer

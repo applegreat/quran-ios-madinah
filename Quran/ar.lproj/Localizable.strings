@@ -1,0 +1,48 @@
+/*
+ New Localizations in Quran for iOS.
+ */
+
+"NetworkError_ConnectionLost" = "فقد الإتصال بشبكة الإنترنت. من فضلك تحرك إلى مكان به إشارة أفضل.";
+"NetworkError_InternationalRoamingOff" = "لا يسمح باستخدام التجوال الدولي. من فضلك قم بتغيير إعدادات خدمة التجوال الدولي، أو إتصل بالإنترنت عن طريق Wi-Fi.";
+"NetworkError_NotConnectedToInternet" = "لا يوجد إتصال بشبكة الإنترنت. من فضلك قم بتشغيل Wi-Fi، أو السماح باتصال البيانات الخلوية.";
+"NetworkError_ServerNotReachable" = "عفوا. حدث خطأ، حاول مرة اخرى.";
+"unknown_error_message" = "عفوا. حدث خطأ، حاول مرة اخرى.";
+"NetworkError_Parsing" = "عفوا. حدث خطأ، حاول مرة اخرى.";
+
+"FileSystemError_Unknown" = "عفوا. حدث خطأ، حاول مرة اخرى.";
+"FileSystemError_NoDiskSpace" = "لا توجد مساحة كافيه في ذاكرة الهاتف لحفظ التنزيلات.";
+
+
+"translatorLabel: " = "المفسر: ";
+"upgradeTranslationButtonTitle" = "تحديث";
+
+"translationsSelectionTitle" = "إختر التفاسير والترجمات";
+"translationsSelectionPrompt" = "إختار بالترتيب المرغوب فيه";
+
+"errorInTranslationText" = "عفوا. حدث خطأ، حاول مرة اخرى.";
+"noAvailableTranslationText" = "لا توجد ترجمة متاحة لهذه الآية.";
+
+"searchRecentsTitle" = "عمليات البحث الأخيرة";
+"searchPopularTitle" = "إختبر البحث بإستخدام";
+
+"translationTextType" = "الترجمة إلى الإنجليزية";
+"transliterationTextType" = "نسخ الحروف للإنجليزية ";
+
+"write_review" = "قيم التطبيق على المتجر الالكتروني‎...";
+"contact_us" = "اتصل بنا";
+"share_app" = "مشاركة التطبيق...";
+
+"menu.arabic" = "عربي";
+"menu.translation" = "الترجمات";
+"menu.select_translation" = "إختر التفاسير والترجمات";
+"menu.pointer" = "مؤشر ترجمة الكلمات";
+"menu.fontSizeLetter" = "أ";
+
+"verseCopy" = "نسخ";
+"verseShare" = "مشاركة...";
+
+"repetitionExperimentalSuffix" = "   (تجريبي)";
+
+"update.dark-theme.title" = "القراءة الليلية";
+"update.dark-theme.desc" = "لقد أضفنا مؤخرًا القراءة الليلية. هل ترغب في تشغيلها؟";
+"update.dark-theme.turnOn" = "تشغيل";
